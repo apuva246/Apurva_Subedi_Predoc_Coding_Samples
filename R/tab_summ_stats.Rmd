@@ -1,0 +1,291 @@
+---
+title: "Migration and Education Expenditure in Nepal"
+author: "Apurva Subedi"
+output:
+  pdf_document: null
+  latex_engine: xelatex
+  html_notebook: default
+  word_document: default
+---
+
+```{r note, include = FALSE}
+# This report is a running draft of my honors thesis which uses the dataset created from the "cleaning+variables.R" file. It includes some summary statistics calculations using survey data, preliminary OLS models and presentation of all results using latex. The content itself is otherwise incomplete.
+```
+
+```{r code, include= FALSE}
+rm(list = ls())
+library(tidyverse)
+library(stargazer)
+library(plm)
+library(survey)
+library(lmtest)
+library(sandwich)
+
+path1 <- "C:/Users/XPS/Desktop/Research/Thesis Research/Remittance/code/"
+setwd(path1)
+
+# Read HH Level Data
+d2018 <- read.csv(" d2018.csv")
+alldata <- read.csv(" alldata.csv")
+
+
+# Read Individual Level Data
+m2018 <- read.csv("m2018.csv")
+m2018$edattain <- as.factor(m2018$edattain) %>% relevel(ref = "No Education")
+s2018 <- svydesign(ids = ~ hhid, weights = ~wt_hh, data = m2018)
+
+options(scipen = 1000000)
+```
+
+
+## Summary Statistics
+
+```{r summary1, include = FALSE}
+
+
+#2.  DATA AMONG ALL KIDS AGED 5 - 17: Enrollment, Dropout, Educ expenditure
+
+    # No Migrant
+  miga <- svydesign(ids = ~ hhid, weights = ~wt_hh, 
+                      data = m2018 %>% filter(migrated == 0))
+
+  # Local Migrant Workers
+  migb <-  svydesign(ids = ~hhid, weights = ~wt_hh, 
+                       data = m2018 %>% filter(local == 1))
+    # Indian Migrant Workers
+  migc <-  svydesign(ids = ~hhid, weights = ~wt_hh, 
+                       data = m2018 %>% filter(india == 1))
+    # Other Intl Migrant Workers
+  migd <-  svydesign(ids = ~hhid, weights = ~wt_hh, 
+                       data = m2018 %>% filter(intlother == 1))
+
+  ## List
+  miglist <- list(miga, migb,migc,migd)   # List for function
+
+  ## SUmmmary stats function
+  sumstat11 <- lapply(miglist, function(mig){
+  
+  options(scipen = 10000000)
+  
+  svymean (~ totrem + school + dropout, 
+           design = mig) %>% as.data.frame() %>% round(digits = 2)
+  }
+  )%>% 
+  bind_cols() 
+
+#-------------------------------------------------------------------------------
+
+#3. DATA AMONG ONLY ENROLLED KIDS AGED 5 - 17
+
+  m2018_enr <- m2018 %>% filter(school == 1) 
+
+   ## No Migrant
+  miga2 <- svydesign(ids = ~ hhid, weights = ~wt_hh, 
+                  data = m2018_enr %>% filter(migrated == 0))
+
+   ## Local Migrant Workers
+  migb2 <-  svydesign(ids = ~hhid, weights = ~wt_hh, 
+                   data = m2018_enr %>% filter(local == 1))
+   ## Indian Migrant Workers
+  migc2 <-  svydesign(ids = ~hhid, weights = ~wt_hh, 
+                   data = m2018_enr %>% filter(india == 1))
+   ## Other Intl Migrant Workers
+  migd2 <-  svydesign(ids = ~hhid, weights = ~wt_hh, 
+                   data = m2018_enr %>% filter(intlother == 1))
+
+   ## List
+  miglist2 <- list(miga2, migb2,migc2,migd2)   # List for function
+
+   ## Summmary stats function
+  sumstat12 <- lapply(miglist2, function(mig){
+  
+  options(scipen = 10000000)
+  
+  svymean (~ educexp + private + absent + absentwork, 
+           design = mig) %>% as.data.frame() %>% round(digits = 2)
+  }
+  )%>% 
+  bind_cols()
+  
+  sumstat1 <- rbind(sumstat11, sumstat12)
+  
+  
+stargazer(sumstat1, summary = FALSE, 
+          title = "Summary Statistics", digits = 2)
+```
+
+```{=tex}
+\begin{table}[!htbp] 
+\centering 
+\setlength{\tabcolsep}{1pt}
+  \caption{Educational Outcomes Summary Statistics} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}} lcccccccc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex]
+& \multicolumn{2}{c}{No Migrants} &\multicolumn{2}{c}{Local Migrant} & \multicolumn{2}{c}{Indian Migrant} & \multicolumn{2}{c}{Intl Migrant}\\ 
+\cline{2-3} \cline{4-5} \cline{6-7} \cline{8-9} \\[-1.8ex] 
+& Mean/Prop & SE & Mean/Prop & SE & Mean/Prop & SE & Mean/Prop & SE \\ 
+\hline \\[-1.8ex]
+\multicolumn{9}{c}{\textbf{All Children Aged 5-17 }} \\
+Remittance Received & $0$ & $0$ & $51,492$ & $5,257$ & $74,081$ & $5,577$ & $174,106$ & $5,843$ \\
+Enrollment Rate & $0.85$ & $0.01$ & $0.87$ & $0.02$ & $0.87$ & $0.02$ & $0.83$ & $0.01$ \\  
+Dropout Rate & $0.08$ & $0.01$ & $0.09$ & $0.01$ & $0.08$ & $0.01$ & $0.10$ & $0.01$ \\
+\\
+\multicolumn{9}{c}{\textbf{Subsample: Enrolled Children Aged 5-17 }}\\
+Education Expenditure & $10,328$ & $373$ & $9,936$ & $657$ & $6,839$ & $450$ & $11,404$ & $401$ \\
+Attends Private School & $0.28$ & $0.01$ & $0.25$ & $0.03$ & $0.18$ & $0.02$ & $0.36$ & $0.02$ \\ 
+School Absence & $0.61$ & $0.01$ & $0.56$ & $0.03$ & $0.71$ & $0.02$ & $0.60$ & $0.02$ \\ 
+Absent due to HH work & $0.32$ & $0.01$ & $0.31$ & $0.03$ & $0.46$ & $0.03$ & $0.24$ & $0.02$ \\
+\hline \\[-1.8ex] 
+\end{tabular} 
+\end{table}
+```
+
+
+```{r summary2, include = FALSE }
+#1. DATA AMONG ALL KIDS AGED 5 - 17: Household Characteristics
+
+  # No Migrant
+  mig0a <- svydesign(ids = ~ hhid, weights = ~wt_hh, 
+                  data = m2018 %>% filter(work == 0))
+
+  # Local Migrant Workers
+  mig0c <-  svydesign(ids = ~hhid, weights = ~wt_hh, 
+                     data = m2018 %>% filter(local == 1) %>% na.omit() )
+  # Indian Migrant Workers
+  mig0d <-  svydesign(ids = ~hhid, weights = ~wt_hh, 
+                     data = m2018 %>% filter(india == 1) %>% na.omit())
+  # Other Intl Migrant Workers
+  mig0e <-  svydesign(ids = ~hhid, weights = ~wt_hh, 
+                     data = m2018 %>% filter(intlother == 1) %>% na.omit())
+  # List
+  miglist0 <- list(mig0a, mig0c, mig0d, mig0e)   # List for function
+  
+  # Summmary stats function
+  sumstat0 <- lapply(miglist0, function(mig){
+    
+    options(scipen = 10000000)
+    
+    svymean (~  headage + `edattainNo.Education` + `edattainPrimary` + `edattainSLC` +
+               `edattainIntermediate..2` + `edattainBachelors` + `edattainMasters.or.Higher`+
+               hhsize + headgender + landsize,
+             design = mig) %>% as.data.frame() %>% round(digits = 3)
+  }
+  )%>% 
+    bind_cols() 
+
+stargazer(sumstat0, summary = FALSE, 
+          title = "Household Charactersitics Summary Statistics", digits = 2)  
+```
+
+
+```{=tex}
+\begin{table}[!htbp] 
+\centering 
+\setlength{\tabcolsep}{1pt}
+  \caption{Educational Outcomes Summary Statistics} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}} lcccccccc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex]
+& \multicolumn{2}{c}{No Migrants} &\multicolumn{2}{c}{Local Migrant} & \multicolumn{2}{c}{Indian Migrant} & \multicolumn{2}{c}{Intl Migrant}\\ 
+\cline{2-3} \cline{4-5} \cline{6-7} \cline{8-9} \\[-1.8ex] 
+& Mean/Prop & SE & Mean/Prop & SE & Mean/Prop & SE & Mean/Prop & SE \\ 
+\hline \\[-1.8ex]
+\multicolumn{9}{c}{\textbf{Households of Children Aged 5-17 }} \\
+HH Head's Age & $46$ & $0$ & $51$ & $1$ & $49$ & $1$ & $48$ & $1$ \\
+HH Head's Gender & $0.87$ & $0.01$ & $0.68$ & $0.03$ & $0.52$ & $0.03$ & $0.50$ & $0.02$ \\
+HH Size & $6.0$ & $0.1$ & $6.3$ & $0.2$ & $6.3$ & $0.2$ & $5.8$ & $0.1$ \\
+HH's Land Size & $4,039$ & $130$ & $5,409$ & $620$ & $2,929$ & $177$ & $3,932$ & $227$ \\ 
+
+HH Head's Education &&&&&&&& \\
+\textit{No Education} & $0.36$ & $0.01$ & $0.44$ & $0.03$ & $0.56$ & $0.03$ & $0.53$ & $0.02$ \\ 
+\textit{Primary} & $0.25$ & $0.01$ & $0.27$ & $0.03$ & $0.22$ & $0.02$ & $0.25$ & $0.02$ \\ 
+\textit{Secondary} & $0.06$ & $0.01$ & $0.04$ & $0.01$ & $0.02$ & $0.01$ & $0.03$ & $0.005$ \\ 
+\textit{Intermediate} & $0.05$ & $0.005$ & $0.01$ & $0.01$ & $0.03$ & $0.01$ & $0.01$ & $0.004$ \\ 
+\textit{Bachelors} & $0.02$ & $0.003$ & $0.01$ & $0.003$ & $0$ & $0$ & $0.003$ & $0.002$ \\ 
+\textit{Masters or Higher} & $0.01$ & $0.002$ & $0.005$ & $0.005$ & $0$ & $0$ & $0.002$ & $0.002$ \\ 
+
+
+\hline \\[-1.8ex] 
+\end{tabular} 
+\end{table}
+```
+
+
+## Models
+
+
+```{r models 1, include = FALSE}
+
+#Enrollment / Migration ~ Controls
+
+  #a1. Migration ~ Head Educ
+     lm(local~ edattain, data = m2018)%>% summary() # Negative: Smallest Impact 
+     lm(india~ edattain, data = m2018)%>% summary() # Negative: Mid Impact
+     lm(intlother~ edattain, data = m2018)%>% summary() # Negative: Largest Impact
+        # Conclusion: Children from HH with more educated HH heads are less likely to have migrants  
+   
+  #a2. Enrollment ~ Head Educ
+     lm(school ~ edattain, data = m2018) %>% summary() # Positive and significant for all
+        # Conclusion: Children from HH with Higher HH head Ed are more likely to be enrolled
+
+  #b1. Migration ~ Head Gender
+     lm(headgender ~ local, data = m2018)%>% summary() # - 0.08***
+     lm(headgender~ india, data = m2018)%>% summary() # -0.26***
+     lm(headgender ~ intlother, data = m2018)%>% summary() # -0.30***
+        # Conclusion: Children from HH with Migrants are less likely to be supervised by HH heads that are male
+
+  #b2. Enrollment ~ Head Gender
+     lm(school ~ headgender, data = m2018) %>% summary() # Negative -0.021*
+     lm(school ~ headgender + edattain, data = m2018) %>% summary() # Negative -0.05***
+        # Conclusion: Children from HH with male HH heads are less likely to go to school
+
+  #c1. Migration ~ HH Size
+     lm(local ~ hhsize, data = m2018) %>% summary() #Positive 0.004**
+     lm(india ~ hhsize, data = m2018) %>% summary() # Positive 0.008***
+     lm(intlother ~ hhsize, data =m2018) %>% summary() # Negative -0.006**
+     
+  #c2. Enrollment ~ HH Size
+     lm(school ~ hhsize, data = m2018) %>% summary() # Negative -0.009***
+  
+ 
+# Enrollment ~  migration
+  
+    ## No controls
+  lm(school~ local, data = m2018)%>% summary() # NO effect 0.007
+  lm(school~ india, data = m2018)%>% summary() # NO effect 0.012
+  lm(school~ intlother, data = m2018)%>% summary() # NEGATIVE effect -0.03**
+    # Children with intl migrants at home are less likely to be enrolled. More likely for others
+  
+    ##a. Accounting for HH Head's EduAttain
+  lm(school~ local + edattain, data = m2018)%>% summary() # No effect 0.013 (+)
+  lm(school~ india + edattain, data = m2018)%>% summary() # Positive effect 0.035**  (+)
+  lm(school~ intlother + edattain, data = m2018)%>% summary() # No effect -0.013 (+)
+  
+    ##b. Accounting for HH Head's Gender
+  lm(school~ local + headgender, data = m2018)%>% summary() # No effect 0.005 (-)
+  lm(school~ india + headgender, data = m2018)%>% summary() # No effect 0.009  (-)
+  lm(school~ intlother + headgender, data = m2018)%>% summary() # NEGATIVE effect -0.039*** (-)
+  
+
+    ##c. Accounting for HH size
+  lm(school~ local + hhsize, data = m2018)%>% summary() # No effect 0.008 (+)
+  lm(school~ india + hhsize, data = m2018)%>% summary() # Positive effect 0.017  (+)
+  lm(school~ intlother + hhsize, data = m2018)%>% summary() # NEgative effect -0.009** (-)
+  
+
+    ## Accounting for HH Head's Eduattain + Gender
+  lm(school~ local + edattain + headgender, data = m2018)%>% summary() # No effect 0.010 
+  lm(school~ india + edattain + headgender, data = m2018)%>% summary() # Positive effect 0.024* 
+  lm(school~ intlother + edattain + headgender, data = m2018)%>% summary # Negative effect -0.0293**
+  
+    ## Accounting for HH Head's Eduattain + Gender + HH Size
+  lm(school~ local + edattain + headgender + hhsize, data = m2018)%>% summary() # No effect 0.011 (+) 
+  lm(school~ india + edattain + headgender + hhsize, data = m2018)%>% summary() # Positive effect 0.028* (+) 
+  lm(school~ intlother + edattain + headgender +hhsize, data = m2018)%>% summary # Negative effect -0.0286** (+)
+  
+    
+
+```
